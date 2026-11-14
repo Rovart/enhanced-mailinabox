@@ -233,11 +233,9 @@ def do_web_update(env):
 
 	# The country filter's rules for HTTPS define the variable the web applications'
 	# locations check, so they must be there first.
-	try:
-		geofence_changed = geofence.write_nginx(env, reload=False)
-	except RuntimeError as e:
-		print(e, file=sys.stderr)
-		geofence_changed = True
+	geofence_changed, problem = geofence.write_nginx(env, reload=False)
+	if problem:
+		print(problem, file=sys.stderr)
 
 	# Did the file change? If not, don't bother writing & restarting nginx.
 	nginx_conf_fn = "/etc/nginx/conf.d/local.conf"

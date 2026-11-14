@@ -739,10 +739,9 @@ def apply(env, block=None, block_all=None):
 	# addresses.
 	import geofence
 	text = apply_firewall(env, block, block_all)
-	try:
-		geofence.write_nginx(env)
-	except RuntimeError as e:
-		text += str(e) + "\n"
+	_, problem = geofence.write_nginx(env)
+	if problem:
+		text += problem + "\n"
 	return text
 
 

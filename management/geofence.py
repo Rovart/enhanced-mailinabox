@@ -435,16 +435,18 @@ def nginx_conf(env, rules=None):
 
 
 def write_nginx(env, reload=True):
-	# Writes the HTTPS rules and reloads nginx if they changed. Returns whether they
-	# changed. If nginx refuses them, writes rules that drop nothing instead and raises
-	# RuntimeError, so that the web applications keep working.
+	# Writes the HTTPS rules and reloads nginx if they changed. Returns (whether they
+	# changed, None or a message for the administrator). If nginx refuses them, writes rules
+	# that drop nothing instead, so that the web applications keep working, and the
+	# message says so with nginx's own words. (A message, not an exception: the control
+	# panel shows it, and exceptions don't belong in the API's answers.)
 	import ip_blocklists
 	rules = get_rules(env)[0] if ip_blocklists.is_available() else None
 	text = nginx_conf(env, rules)
 	try:
 		with open(NGINX_CONF) as f:
 			if f.read() == text:
-				return False
+				return False, None
 	except OSError:
 		pass
 
@@ -455,15 +457,15 @@ def write_nginx(env, reload=True):
 
 	write(text)
 	if not os.path.exists("/usr/sbin/nginx"):
-		return True
+		return True, None
 	result = subprocess.run(["/usr/sbin/nginx", "-t"], capture_output=True, text=True)
 	if result.returncode != 0:
 		write(nginx_conf(env))
-		raise RuntimeError("nginx refused the country filter's rules for HTTPS, so HTTPS isn't filtered: "
-						+ result.stderr.strip()[-500:])
+		return True, ("nginx refused the country filter's rules for HTTPS, so HTTPS isn't filtered: "
+					+ result.stderr.strip()[-500:])
 	if reload:
 		subprocess.run(["/usr/sbin/service", "nginx", "reload"], capture_output=True)
-	return True
+	return True, None
 
 
 def web_blocked(since):
