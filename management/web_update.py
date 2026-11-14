@@ -11,7 +11,7 @@ from mailconfig import get_mail_domains
 from dns_update import get_custom_dns_config, get_dns_zones
 from ssl_certificates import get_ssl_certificates, get_domain_ssl_files, check_certificate
 from utils import shell, safe_domain_name, sort_domains, get_php_version
-from services import get_served_services, get_access_rules, filter_template
+from services import get_served_services, get_access_rules, filter_template, WEB_ACCESS_AREAS
 
 
 def get_web_domains(env,
@@ -177,9 +177,13 @@ def do_web_update(env):
 		template0 = template0.replace("listen [::]:443 ssl http2;",
 									"listen [::]:443 ssl;")
 	# Leave out the locations of the optional services that are turned off, and
-	# restrict the web applications that are only available locally.
+	# restrict the web applications that are only available locally. Their locations
+	# start with the country filter's check, which only drops requests while it covers
+	# HTTPS (see geofence.py).
+	import geofence
 	enabled_services = get_served_services(env)
 	access_rules = get_access_rules(env)
+	access_rules = {area: [geofence.nginx_check()] + access_rules.get(area, []) for area in WEB_ACCESS_AREAS}
 	template1 = filter_template(
 		open(
 			os.path.join(os.path.dirname(__file__),
@@ -227,9 +231,8 @@ def do_web_update(env):
 			nginx_conf += make_domain_config(domain, [template0, template3],
 											ssl_certificates, env)
 
-	# The country filter's rules for HTTPS define the variable the template checks, so
-	# they must be there first. They also depend on the domains (see geofence.py).
-	import geofence
+	# The country filter's rules for HTTPS define the variable the web applications'
+	# locations check, so they must be there first.
 	try:
 		geofence_changed = geofence.write_nginx(env, reload=False)
 	except RuntimeError as e:

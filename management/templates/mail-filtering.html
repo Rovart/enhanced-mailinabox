@@ -189,8 +189,8 @@
 							<option value="logins">Mail apps</option>
 							<option value="web">Mail apps and HTTPS</option>
 						</select>
-						<div id="geofence-scope-help" class="form-text">HTTPS: webmail, Nextcloud, this panel and the
-							websites that aren&rsquo;t behind a CDN.</div>
+						<div id="geofence-scope-help" class="form-text">HTTPS: webmail, Nextcloud, ActiveSync and this
+							panel. Never your websites.</div>
 					</div>
 				</div>
 				<p id="geofence-summary" aria-live="polite"></p>
@@ -616,11 +616,8 @@
 			summary.text("The country filter is off.");
 		else if (g.active) {
 			summary.text((g.mode == 'allow' ? "On: only these countries can connect to the "
-				: "On: these countries can't connect to the ") + (g.scope == 'web' ? "mail apps and HTTPS" : "mail apps")
+				: "On: these countries can't connect to the ") + (g.scope == 'web' ? "mail apps, webmail, Nextcloud and this panel" : "mail apps")
 				+ ". Country data from " + protection_date(g.updated) + ".");
-			if (g.scope == 'web' && g.proxied && g.proxied.length)
-				summary.append($('<div class="small text-body-secondary"/>').text(
-					"Not filtered (behind a CDN): " + g.proxied.join(", ") + "."));
 		} else
 			summary.addClass('text-warning').text(g.reason);
 		if (g.error)

@@ -653,7 +653,7 @@ def update(env, download=True):
 			except RuntimeError:
 				pass
 	if not settings["enabled"] or not is_available():
-		return apply(env, refresh_proxied=download)
+		return apply(env)
 	sources = [s for s in settings["sources"] if s["enabled"]]
 	scopes = {s["url"]: s["scope"] for s in sources}
 	results = {}
@@ -686,7 +686,7 @@ def update(env, download=True):
 		"sources": {url: s for url, (_, s) in results.items()},
 	}
 	write_status(status)
-	return apply(env, block, block_all, refresh_proxied=download)
+	return apply(env, block, block_all)
 
 
 def subtract(networks, minus):
@@ -731,16 +731,16 @@ def subtract(networks, minus):
 	return result
 
 
-def apply(env, block=None, block_all=None, refresh_proxied=False):
+def apply(env, block=None, block_all=None):
 	# Loads the rules from the last merged lists (without downloading them), e.g. after
 	# the networks of known logins or the administrator's own list changed, or removes
 	# them if the blocklists are off and the administrator's list is empty. Then writes
 	# the country filter's HTTPS rules for nginx (see geofence.py), which exempt the same
-	# addresses; refresh_proxied looks up again which sites are behind a CDN.
+	# addresses.
 	import geofence
 	text = apply_firewall(env, block, block_all)
 	try:
-		geofence.write_nginx(env, refresh=refresh_proxied)
+		geofence.write_nginx(env)
 	except RuntimeError as e:
 		text += str(e) + "\n"
 	return text
@@ -771,7 +771,7 @@ def apply_firewall(env, block=None, block_all=None):
 		countries = ", ".join(geofence.get_settings(env)["countries"])
 		geo_text = "%s connections from %s on ports %s%s.\n" % (
 			"Allowing only" if geo["mode"] == "allow" else "Blocking", countries,
-			", ".join(str(p) for p in geo["ports"]), " and HTTPS" if geo["web"] else "")
+			", ".join(str(p) for p in geo["ports"]), " and HTTPS (webmail, Nextcloud, ActiveSync, control panel)" if geo["web"] else "")
 	else:
 		geo_text = geo_reason + "\n" if geofence.get_settings(env)["enabled"] else ""
 	return "Blocking %d networks on the login ports and %d on every port (%d of them yours)%s.\n%s" % (

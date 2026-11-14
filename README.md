@@ -18,7 +18,7 @@ Mail-in-a-Box gives you a mail server with sane defaults that work out of the bo
 
 **Protection against attacks**
 - **IP blocklists**, on by default: public lists of attackers (blocklist.de, Spamhaus DROP, and more you can add with one click) and your own list, each for the login ports only or for every port. Your users' own networks are never blocked.
-- **Country filter**: allow only the countries your users connect from, or block the ones you choose. Your local network, Tailscale and other VPNs always get through.
+- **Country filter**: allow only the countries your users connect from, or block the ones you choose, for the mail apps and optionally the webmail, Nextcloud and the control panel. Your websites, your local network, Tailscale and other VPNs always get through.
 - **An email when an account logs in from a new place** (another internet provider or country), so a stolen password shows up. A table of every login, with the approximate city, country and provider.
 - **A security dashboard**: failed logins, bans and blocked connections over 24 hours, 7 or 30 days, a world map of where attacks come from, the most active attackers with a Block button, and the blocked addresses downloadable for any CDN or WAF.
 - Slower fail2ban rules for password guessing spread over time, a limit on login attempts per address, and a firewall that keeps your own SSH rules.
@@ -40,7 +40,7 @@ Mail-in-a-Box gives you a mail server with sane defaults that work out of the bo
 
 ## Latest release: v61.20
 
-- **Country filter and CDNs**: with HTTPS filtered too, the websites behind a CDN (like Cloudflare) are no longer blocked. HTTPS is now filtered by nginx, per site.
+- **Country filter**: over HTTPS it covers only the webmail, Nextcloud, ActiveSync and the control panel. Your websites are never blocked, behind a CDN (like Cloudflare) or not.
 - **Dashboard**: what the country filter blocks is counted, apart from the IP blocklists.
 - Shorter texts in Mail > Filtering > Login protection.
 
