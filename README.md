@@ -4,7 +4,7 @@ A complete, self-hosted mail server that you can deploy on a fresh Debian or Ubu
 
 Enhanced Mail-in-a-Box is a maintained fork of [Power Mail-in-a-Box](https://github.com/ddavness/power-mailinabox) by David Duque, itself based on [Mail-in-a-Box](https://mailinabox.email/). Up to v61.18 it was also called Power Mail-in-a-Box.
 
-**Current version: v61.20** · [Install](#installation) · [Upgrade](#upgrading) · [Changelog](CHANGELOG.md) · [Releases](https://github.com/Rovart/enhanced-mailinabox/releases)
+**Current version: v61.21** · [Install](#installation) · [Upgrade](#upgrading) · [Changelog](CHANGELOG.md) · [Releases](https://github.com/Rovart/enhanced-mailinabox/releases)
 
 ## What it adds
 
@@ -39,13 +39,12 @@ Mail-in-a-Box gives you a mail server with sane defaults that work out of the bo
 - **Per-domain web server configuration:** `/home/user-data/www/<domain>.conf` is included in that domain's nginx configuration, so you can add PHP, proxies or anything else nginx supports.
 - **Debian support,** besides Ubuntu.
 
-## Latest release: v61.20
+## Latest release: v61.21
 
-- **Country filter**: over HTTPS it covers only the webmail, Nextcloud, ActiveSync and the control panel. Your websites are never blocked, behind a CDN (like Cloudflare) or not.
-- **Dashboard**: what the country filter blocks is counted, apart from the IP blocklists.
-- Shorter texts in Mail > Filtering > Login protection.
+- **Passkeys**: log in to the control panel with your fingerprint, face or screen lock, or a security key. Add them in the account menu > Passkeys & two-factor.
+- `management/cli.py user mfa disable` without an id works again.
 
-v61.19 brought the country filter, the new name ([Rovart/enhanced-mailinabox](https://github.com/Rovart/enhanced-mailinabox)), a safer control panel API and Nextcloud 34.0.6.
+v61.20 limited the country filter over HTTPS to the box's web applications, so your websites are never blocked. v61.19 brought the country filter, the new name ([Rovart/enhanced-mailinabox](https://github.com/Rovart/enhanced-mailinabox)), a safer control panel API and Nextcloud 34.0.6.
 
 Earlier versions are described in the [changelog](CHANGELOG.md) and the [releases](https://github.com/Rovart/enhanced-mailinabox/releases).
 
@@ -125,7 +124,7 @@ The box configures its own firewall. If it is behind an external firewall or NAT
 2. Run the setup and follow the instructions on the screen:
 
    ```
-   curl -L https://raw.githubusercontent.com/Rovart/enhanced-mailinabox/v61.20/setup/bootstrap.sh | sudo bash
+   curl -L https://raw.githubusercontent.com/Rovart/enhanced-mailinabox/v61.21/setup/bootstrap.sh | sudo bash
    ```
 
 3. Open the control panel at `https://<your box's hostname>/admin` and follow the status checks to finish the DNS configuration.
@@ -137,7 +136,7 @@ The box manages its firewall with `ufw`. Your own rules for SSH are left as they
 Run the same command as for a new installation:
 
 ```
-curl -L https://raw.githubusercontent.com/Rovart/enhanced-mailinabox/v61.20/setup/bootstrap.sh | sudo bash
+curl -L https://raw.githubusercontent.com/Rovart/enhanced-mailinabox/v61.21/setup/bootstrap.sh | sudo bash
 ```
 
 It downloads the new version and runs the setup again, keeping your data and settings. To be told when a new version is out, turn on *Check for new versions* in the control panel's status checks (it is off by default). To run the setup again without upgrading, use `sudo mailinabox`.
