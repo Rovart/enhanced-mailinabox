@@ -12,6 +12,8 @@ Unreleased
   `management/cli.py user passkeys`. Logging in with a password, and two-factor codes, work as
   before. The box checks passkeys with py_webauthn 3.0.1 (checks of user verification and of the
   signature counter included, each challenge used once within five minutes).
+* `management/cli.py user mfa disable user@domain.com` without an id turns off all of the user's
+  two-factor again. It answered "Invalid user or MFA id." and changed nothing.
 
 Enhanced Mail-in-a-Box v61.20
 -----------------------------

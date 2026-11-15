@@ -180,13 +180,12 @@ elif sys.argv[1] == "user" and len(
 
 elif sys.argv[1] == "user" and len(
 		sys.argv) in (5, 6) and sys.argv[2:4] == ["mfa", "disable"]:
-	# Disable MFA (all or a particular device) for a user.
-	print(
-		mgmt(
-			"/mfa/disable", {
-				"user": sys.argv[4],
-				"mfa-id": sys.argv[5] if len(sys.argv) == 6 else None
-			}))
+	# Disable MFA (all or a particular device) for a user. Without an id, the field isn't
+	# sent: urlencode() would send None as the text "None".
+	data = {"user": sys.argv[4]}
+	if len(sys.argv) == 6:
+		data["mfa-id"] = sys.argv[5]
+	print(mgmt("/mfa/disable", data))
 
 elif sys.argv[1] == "user" and len(sys.argv) == 4 and sys.argv[2] == "passkeys":
 	# List a user's passkeys.
