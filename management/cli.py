@@ -90,6 +90,8 @@ if len(sys.argv) < 2:
 {cli} user admins                              (lists admins)
 {cli} user mfa show user@domain.com            (shows MFA devices for user, if any)
 {cli} user mfa disable user@domain.com [id]    (disables MFA for user)
+{cli} user passkeys user@domain.com            (lists the user's passkeys for the control panel)
+{cli} user passkeys remove user@domain.com [id]  (removes one or all of them)
 {cli} alias                                    (lists aliases)
 {cli} alias add incoming.name@domain.com sent.to@other.domain.com
 {cli} alias add incoming.name@domain.com 'sent.to@other.domain.com, multiple.people@other.domain.com'
@@ -178,13 +180,27 @@ elif sys.argv[1] == "user" and len(
 
 elif sys.argv[1] == "user" and len(
 		sys.argv) in (5, 6) and sys.argv[2:4] == ["mfa", "disable"]:
-	# Disable MFA (all or a particular device) for a user.
-	print(
-		mgmt(
-			"/mfa/disable", {
-				"user": sys.argv[4],
-				"mfa-id": sys.argv[5] if len(sys.argv) == 6 else None
-			}))
+	# Disable MFA (all or a particular device) for a user. Without an id, the field isn't
+	# sent: urlencode() would send None as the text "None".
+	data = {"user": sys.argv[4]}
+	if len(sys.argv) == 6:
+		data["mfa-id"] = sys.argv[5]
+	print(mgmt("/mfa/disable", data))
+
+elif sys.argv[1] == "user" and len(sys.argv) == 4 and sys.argv[2] == "passkeys":
+	# List a user's passkeys.
+	status = mgmt("/mfa/status", {"user": sys.argv[3]}, is_json=True)
+	W = csv.writer(sys.stdout)
+	W.writerow(["id", "label", "created", "last_used"])
+	for passkey in status["passkeys"]:
+		W.writerow([passkey["id"], passkey["label"], passkey["created"], passkey["last_used"] or ""])
+
+elif sys.argv[1] == "user" and len(sys.argv) in (5, 6) and sys.argv[2:4] == ["passkeys", "remove"]:
+	# Remove one of a user's passkeys, or all of them.
+	data = {"user": sys.argv[4]}
+	if len(sys.argv) == 6:
+		data["id"] = sys.argv[5]
+	print(mgmt("/mfa/passkeys/remove", data))
 
 elif sys.argv[1] == "alias" and len(sys.argv) == 2:
 	print(mgmt("/mail/aliases"))

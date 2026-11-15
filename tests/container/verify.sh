@@ -40,7 +40,7 @@ check "only php$PHP_VER-fpm running" '[ -z "$(systemctl list-units --type=servic
 
 echo "== control panel"
 check "admin page" '$C -o /dev/null -w "%{http_code}" $H/admin/ | grep -q 200'
-check "admin assets (jquery, panel css/js, Inter, fontawesome)" '(for a in jquery.min.js panel/panel.css panel/panel.js panel/inter.woff2 fontawesome/css/solid.min.css; do $C -o /dev/null -w "%{http_code}" $H/admin/assets/$a | grep -q 200 || exit 1; done)'
+check "admin assets (jquery, panel css/js, Inter, fontawesome)" '(for a in jquery.min.js panel/panel.css panel/panel.js panel/passkeys.js panel/inter.woff2 fontawesome/css/solid.min.css; do $C -o /dev/null -w "%{http_code}" $H/admin/assets/$a | grep -q 200 || exit 1; done)'
 check "admin page doesn't load Bootstrap" '! $C $H/admin/ | grep -qiE "bootstrap(\.bundle)?(\.min)?\.(css|js)|data-bs-" && $C $H/admin/ | grep -q "panel/panel.css?v="'
 KEY=$($C -X POST -u "$U:$P" $H/admin/login | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('api_key',''))" 2>/dev/null)
 check "admin login via API" '[ -n "$KEY" ]'
@@ -54,10 +54,122 @@ check "API: pgp keyring" '$C -u "$U:$KEY" $H/admin/system/pgp/ | grep -q "daemon
 check "API: ssl status" '$C -u "$U:$KEY" $H/admin/ssl/status | grep -q "can_provision"'
 MC=$(mktemp)
 check "API: 2FA QR code is a PNG, drawn without Pillow" '$C -u "$U:$KEY" -X POST $H/admin/mfa/status | python3 -c "import base64, json, sys; png = base64.b64decode(json.load(sys.stdin)[\"new_mfa\"][\"totp\"][\"qr_code_base64\"]); sys.exit(0 if png[:8] == b\"\\x89PNG\\r\\n\\x1a\\n\" else 1)" && ! /usr/local/lib/mailinabox/env/bin/python -c "import PIL" 2>/dev/null'
+# Two-factor on and off again. Turning it on ends the user's sessions ($KEY) until it's off.
+TOTP_SECRET=$($C -u "$U:$KEY" -X POST $H/admin/mfa/status | python3 -c "import json,sys; print(json.load(sys.stdin)['new_mfa']['totp']['secret'])" 2>/dev/null)
+TOTP_TOKEN=$(/usr/local/lib/mailinabox/env/bin/python -c "import pyotp,sys; print(pyotp.TOTP(sys.argv[1]).now())" "$TOTP_SECRET" 2>/dev/null)
+check "API: turn on two-factor, then a password login asks for the code" '[ "$($C -u "$U:$KEY" -X POST -d "secret=$TOTP_SECRET" -d "token=$TOTP_TOKEN" -d "label=Test" $H/admin/mfa/totp/enable)" == OK ] && $C -X POST -u "$U:$P" $H/admin/login | grep -q missing-totp-token'
+check "CLI: user mfa disable without an id turns off all of the user's two-factor" '[ "$(/root/mailinabox/management/cli.py user mfa disable $U)" == OK ] && [ "$($C -u "$U:$KEY" -X POST $H/admin/mfa/status | python3 -c "import json,sys; print(len(json.load(sys.stdin)[\"enabled_mfa\"]))")" == 0 ]'
+# In case the CLI didn't: the other checks log in with the password alone.
+curl -s --max-time 60 -u "$(cat /var/lib/mailinabox/api.key):" -d "user=$U" http://127.0.0.1:10222/mfa/disable >/dev/null
 check "API: munin" '$C -c $MC -u "$U:$KEY" $H/admin/munin/ | grep -q OK && $C -b $MC -o /dev/null -w "%{http_code}" $H/admin/munin/index.html | grep -q 200'
 check "admin page is HTML, API messages are plain text" '$C -o /dev/null -w "%{content_type}" $H/admin/ | grep -q "^text/html" && $C -u "$U:$KEY" -o /dev/null -w "%{content_type}" -X POST --data-urlencode "email=<b>x</b>" -d "password=x" $H/admin/mail/users/add | grep -q "^text/plain"'
 check "API: changes a browser sends for another site are refused" '[ "$($C -u "$U:$KEY" -H "Sec-Fetch-Site: cross-site" -o /dev/null -w "%{http_code}" -X POST -d "email=csrf@example.com" -d "password=Secret123!pw" $H/admin/mail/users/add)" == 403 ] && ! $C -u "$U:$KEY" "$H/admin/mail/users?format=json" | grep -q csrf@example.com'
 check "API: same-origin requests (the control panel) still work" '$C -u "$U:$KEY" -H "Sec-Fetch-Site: same-origin" -X POST $H/admin/system/status | grep -q "\"type\""'
+
+echo "== passkeys"
+WEBAUTHN_VER=$(sed -n 's/.*"webauthn==\([0-9.]*\)".*/\1/p' /root/mailinabox/setup/management.sh)
+check "webauthn $WEBAUTHN_VER in the management venv" '[ "$(/usr/local/lib/mailinabox/env/bin/python -c "import webauthn; print(webauthn.__version__)")" == "$WEBAUTHN_VER" ]'
+check "passkeys table" 'sqlite3 /home/user-data/mail/users.sqlite "SELECT count(*) FROM passkeys" >/dev/null'
+# A software authenticator (an EC P-256 key, as a passkey) against the box: adding a
+# passkey, logging in with it, and the refusals.
+PK=$(mktemp)
+FAILED_LOGINS=$(journalctl -u mailinabox --no-pager -o cat | grep -c "Failed login attempt")
+/usr/local/lib/mailinabox/env/bin/python - "$U" "$P" > $PK 2>&1 <<'EOF'
+import base64, cbor2, hashlib, json, os, ssl, subprocess, sys, urllib.parse, urllib.request
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+U, P = sys.argv[1], sys.argv[2]
+BASE, ORIGIN, RP = "https://127.0.0.1/admin", "https://box.example.com", "box.example.com"
+ctx = ssl._create_unverified_context()
+def b64u(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+def post(path, data=None, user=None, password=None):
+	req = urllib.request.Request(BASE + path, urllib.parse.urlencode(data or {}).encode(), method="POST")
+	if user:
+		req.add_header("Authorization", "Basic " + base64.b64encode(("%s:%s" % (user, password)).encode()).decode())
+	try:
+		with urllib.request.urlopen(req, context=ctx, timeout=60) as r:
+			status, body = r.status, r.read().decode()
+	except urllib.error.HTTPError as e:
+		status, body = e.code, e.read().decode()
+	try:
+		return status, json.loads(body)
+	except ValueError:
+		return status, body
+def check(name, ok):
+	print(("PASS: " if ok else "FAIL: ") + "passkeys: " + name)
+class Authenticator:
+	def __init__(self):
+		self.key, self.cred_id, self.count, self.user = ec.generate_private_key(ec.SECP256R1()), os.urandom(16), 0, None
+	def create(self, o):
+		self.user = base64.urlsafe_b64decode(o["user"]["id"] + "==")
+		cd = json.dumps({"type": "webauthn.create", "challenge": o["challenge"], "origin": ORIGIN}).encode()
+		n = self.key.public_key().public_numbers()
+		cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: n.x.to_bytes(32, "big"), -3: n.y.to_bytes(32, "big")})
+		ad = hashlib.sha256(o["rp"]["id"].encode()).digest() + b"\x45" + bytes(4) + bytes(16) + len(self.cred_id).to_bytes(2, "big") + self.cred_id + cose
+		ao = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": ad})
+		return json.dumps({"id": b64u(self.cred_id), "rawId": b64u(self.cred_id), "type": "public-key",
+			"response": {"clientDataJSON": b64u(cd), "attestationObject": b64u(ao), "transports": ["internal"]}})
+	def get(self, o, uv=True, origin=ORIGIN):
+		self.count += 1
+		cd = json.dumps({"type": "webauthn.get", "challenge": o["challenge"], "origin": origin}).encode()
+		ad = hashlib.sha256(o["rpId"].encode()).digest() + (b"\x05" if uv else b"\x01") + self.count.to_bytes(4, "big")
+		sig = self.key.sign(ad + hashlib.sha256(cd).digest(), ec.ECDSA(hashes.SHA256()))
+		return json.dumps({"id": b64u(self.cred_id), "rawId": b64u(self.cred_id), "type": "public-key",
+			"response": {"clientDataJSON": b64u(cd), "authenticatorData": b64u(ad), "signature": b64u(sig), "userHandle": b64u(self.user)}})
+def login(answer):
+	return post("/login/passkey", {"credential": answer})[1]
+
+# (A passkey left by an earlier run would change what is listed.)
+subprocess.run(["/root/mailinabox/management/cli.py", "user", "passkeys", "remove", U], capture_output=True)
+status, r = post("/login", user=U, password=P)
+key = r["api_key"]
+status, r = post("/mfa/passkeys/options", {"password": "not-" + P}, U, key)
+check("adding one needs the password", status == 400)
+status, o = post("/mfa/passkeys/options", {"password": P}, U, key)
+check("registration options (the box's hostname, discoverable, user verification required)", status == 200
+	and o["rp"]["id"] == RP and o["authenticatorSelection"]["residentKey"] == "required"
+	and o["authenticatorSelection"]["userVerification"] == "required")
+a = Authenticator()
+answer = a.create(o)
+status, r = post("/mfa/passkeys/add", {"credential": answer, "label": "Test key"}, U, key)
+check("add one", status == 200)
+status, r = post("/mfa/passkeys/add", {"credential": answer, "label": "Test key"}, U, key)
+check("a registration answer is used once", status == 400)
+status, r = post("/mfa/status", {}, U, key)
+check("listed in the MFA status", [p["label"] for p in r["passkeys"]] == ["Test key"])
+cli = subprocess.run(["/root/mailinabox/management/cli.py", "user", "passkeys", U], capture_output=True, text=True).stdout
+check("listed by the CLI", "Test key" in cli)
+
+answer = a.get(post("/login/passkey/options")[1])
+r = login(answer)
+check("login", r.get("status") == "ok" and r.get("email") == U and r.get("api_key"))
+pk_key = r.get("api_key")
+accepted = a.count
+check("the session works", post("/mfa/status", {}, U, pk_key)[0] == 200)
+check("a login answer is used once", login(answer).get("status") == "invalid")
+check("login without user verification is refused", login(a.get(post("/login/passkey/options")[1], uv=False)).get("status") == "invalid")
+a.count = accepted - 1  # the next answer sends the last accepted count again
+check("a signature counter that didn't go up is refused", login(a.get(post("/login/passkey/options")[1])).get("status") == "invalid")
+check("an answer for another site is refused", login(a.get(post("/login/passkey/options")[1], origin="https://box.example.com.evil.example")).get("status") == "invalid")
+check("login again after the refusals", login(a.get(post("/login/passkey/options")[1])).get("status") == "ok")
+
+status, r = post("/mfa/status", {}, U, key)
+pid = r["passkeys"][0]["id"]
+check("remove it", post("/mfa/passkeys/remove", {"id": pid}, U, key)[0] == 200)
+check("its sessions end", post("/mfa/status", {}, U, pk_key)[0] in (401, 403) and post("/mfa/status", {}, U, key)[0] == 200)
+check("it doesn't log in any more", login(a.get(post("/login/passkey/options")[1])).get("status") == "invalid")
+print("DONE")
+EOF
+while read -r line; do
+	case "$line" in
+		"PASS: "*) ok "${line#PASS: }" ;;
+		"FAIL: "*) bad "${line#FAIL: }" ;;
+		DONE) ;;
+		*) echo "$line" ;;
+	esac
+done < $PK
+check "passkeys: the test ran to the end" 'grep -qx DONE $PK'
+check "passkeys: refusals are logged as failed logins, for fail2ban" '[ $(journalctl -u mailinabox --no-pager -o cat | grep -c "Failed login attempt") -ge $((FAILED_LOGINS + 6)) ]'
 
 echo "== webmail"
 check "roundcube login page" '$C $H/mail/ | grep -qi "rcmloginuser"'

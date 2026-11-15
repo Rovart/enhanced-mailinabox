@@ -196,6 +196,11 @@ def migration_15(env):
 	db = os.path.join(env["STORAGE_ROOT"], 'mail/users.sqlite')
 	shell("check_call", ["sqlite3", db, "CREATE TABLE auto_aliases (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL UNIQUE, destination TEXT NOT NULL, permitted_senders TEXT);"])
 
+def migration_16(env):
+	# Add the "passkeys" table for logging into the control panel with passkeys (WebAuthn).
+	db = os.path.join(env["STORAGE_ROOT"], 'mail/users.sqlite')
+	shell("check_call", ["sqlite3", db, "CREATE TABLE IF NOT EXISTS passkeys (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, transports TEXT, user_handle TEXT NOT NULL, label TEXT, created TEXT, last_used TEXT, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE);"])
+
 ###########################################################
 
 def get_current_migration():

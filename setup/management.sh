@@ -78,13 +78,16 @@ hide_output $venv/bin/pip install --upgrade pip
 # Install other Python 3 packages used by the management daemon.
 # The first line is the packages that Josh maintains himself!
 # NOTE: email_validator is also used in setup/questions.sh (from the distribution's packages).
+# webauthn (py_webauthn, by Duo Labs) checks the passkeys of the control panel's logins; its
+# version is fixed because it checks signatures. See https://pypi.org/project/webauthn/ for
+# new versions.
 # --upgrade-strategy eager also upgrades their dependencies: with the default only-if-needed,
 # an existing venv keeps old Jinja2, Werkzeug, urllib3 or aiohttp (behind the admin panel and
 # the MTA-STS resolver) on every setup run, whatever security fixes they got.
 hide_output $venv/bin/pip install --upgrade --upgrade-strategy eager \
 	rtyaml "email_validator>=1.0.0" "exclusiveprocess" \
 	flask dnspython python-dateutil expiringdict gunicorn \
-	qrcode[png] pyotp \
+	qrcode[png] pyotp "webauthn==3.0.1" \
 	"idna>=2.0.0" cryptography psutil postfix-mta-sts-resolver boto3 b2sdk
 
 # Earlier versions installed Pillow for the TOTP QR codes, which are now drawn with pypng.

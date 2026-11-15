@@ -37,6 +37,10 @@ if command -v node >/dev/null; then
 		node --check "$tmp/check.js" 2>/dev/null || bad "javascript syntax: $f"
 	done
 	rm -rf "$tmp"
+	# And the panel's own scripts.
+	for f in conf/panel/*.js; do
+		node --check "$f" 2>/dev/null || bad "javascript syntax: $f"
+	done
 else
 	echo "(node is not installed: skipping the JavaScript checks)"
 fi
