@@ -72,6 +72,12 @@ sudo management/cli.py user make-admin me@{{hostname}}</code></pre>
 					<span class="fa-solid fa-right-to-bracket me-1" aria-hidden="true"></span> Sign in
 				</button>
 			</form>
+			<div id="loginPasskey" class="d-none">
+				<p class="text-center text-body-secondary small my-3">or</p>
+				<button type="button" class="btn btn-outline-secondary w-100 py-2" onclick="do_passkey_login(); return false;">
+					<span class="fa-solid fa-fingerprint me-1" aria-hidden="true"></span> Sign in with a passkey
+				</button>
+			</div>
 		</div>
 	</div>
 
@@ -135,45 +141,7 @@ sudo management/cli.py user make-admin me@{{hostname}}</code></pre>
 					show_modal_error("Login Failed", "You are not an administrator on this system.");
 
 				} else {
-					// Login succeeded.
-
-					// Save the new credentials.
-					api_credentials = {
-						username: response.email,
-						session_key: response.api_key,
-						privileges: response.privileges
-					};
-
-					// Try to wipe the username/password information.
-					$('#loginEmail').val('');
-					$('#loginPassword').val('');
-					$('#loginOtpInput').val('');
-					$('#loginForm').removeClass('is-twofactor');
-
-					// Remember the credentials: until the browser is closed, or on this
-					// device if the user asked for it.
-					try {
-						if ($('#loginRemember').is(':checked')) {
-							localStorage.setItem("miab-cp-credentials", JSON.stringify(api_credentials));
-							sessionStorage.removeItem("miab-cp-credentials");
-						} else {
-							localStorage.removeItem("miab-cp-credentials");
-							sessionStorage.setItem("miab-cp-credentials", JSON.stringify(api_credentials));
-						}
-					} catch (_) {
-					}
-
-					// Toggle menus.
-					show_hide_menus();
-
-					// Open the next panel the user wants to go to. Do this after the XHR response
-					// is over so that we don't start a new XHR request while this one is finishing,
-					// which confuses the loading indicator.
-					var next_panel = switch_back_to_panel;
-					setTimeout(function () {
-						show_account_info();
-						show_panel(!next_panel || next_panel == "login" ? 'welcome' : next_panel);
-					}, 100);
+					login_succeeded(response);
 				}
 			},
 			undefined,
@@ -182,7 +150,76 @@ sudo management/cli.py user make-admin me@{{hostname}}</code></pre>
 			});
 	}
 
+	function login_succeeded(response) {
+		// Save the new credentials.
+		api_credentials = {
+			username: response.email,
+			session_key: response.api_key,
+			privileges: response.privileges
+		};
+
+		// Try to wipe the username/password information.
+		$('#loginEmail').val('');
+		$('#loginPassword').val('');
+		$('#loginOtpInput').val('');
+		$('#loginForm').removeClass('is-twofactor');
+
+		// Remember the credentials: until the browser is closed, or on this
+		// device if the user asked for it.
+		try {
+			if ($('#loginRemember').is(':checked')) {
+				localStorage.setItem("miab-cp-credentials", JSON.stringify(api_credentials));
+				sessionStorage.removeItem("miab-cp-credentials");
+			} else {
+				localStorage.removeItem("miab-cp-credentials");
+				sessionStorage.setItem("miab-cp-credentials", JSON.stringify(api_credentials));
+			}
+		} catch (_) {
+		}
+
+		// Toggle menus.
+		show_hide_menus();
+
+		// Open the next panel the user wants to go to. Do this after the XHR response
+		// is over so that we don't start a new XHR request while this one is finishing,
+		// which confuses the loading indicator.
+		var next_panel = switch_back_to_panel;
+		setTimeout(function () {
+			show_account_info();
+			show_panel(!next_panel || next_panel == "login" ? 'welcome' : next_panel);
+		}, 100);
+	}
+
+	function do_passkey_login() {
+		// A passkey replaces the email address, the password and the two-factor code. The
+		// browser asks the user which passkey to use for this box.
+		api_credentials = null;
+		api(
+			"/login/passkey/options",
+			"POST",
+			{},
+			function (options) {
+				passkeys.get(options).then(function (credential) {
+					api(
+						"/login/passkey",
+						"POST",
+						{ credential: JSON.stringify(credential) },
+						function (response) {
+							if (response.status != 'ok')
+								show_modal_error("Login Failed", response.reason);
+							else
+								login_succeeded(response);
+						});
+				}, function (error) {
+					var message = passkeys.error_message(error, options.rpId);
+					if (message)
+						show_modal_error("Login Failed", message);
+				});
+			});
+	}
+
 	function show_login() {
+		$('#loginPasskey').toggleClass('d-none', !passkeys.supported());
 		$('#loginForm').removeClass('is-twofactor');
 		$('#loginOtpInput').val('');
 		$('#loginEmail,#loginPassword').each(function () {

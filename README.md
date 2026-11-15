@@ -25,6 +25,7 @@ Mail-in-a-Box gives you a mail server with sane defaults that work out of the bo
 
 **Control panel**
 - A new design: a sidebar with every section in view, light and dark themes, usable on phones and with the keyboard.
+- **Passkeys**: log in with your fingerprint, face or screen lock, or a security key, instead of your password and two-factor code.
 - **Mail filtering**: let the mail servers you trust skip greylisting, and refuse mail from senders, domains or servers you block.
 - **Optional services**: turn Nextcloud, Exchange ActiveSync, Roundcube or Munin off and back on. Their data is kept and backed up.
 - **Local-only access**: make the control panel, webmail, Nextcloud or Exchange ActiveSync reachable only from the box itself (e.g. through an SSH tunnel or a VPN) and from trusted networks.
@@ -73,7 +74,7 @@ Boxes installed from the original repository can switch to Enhanced Mail-in-a-Bo
 - Static websites for every domain.
 
 **Administration**
-- A web control panel with two-factor authentication, to manage users, aliases, DNS, certificates, websites and backups.
+- A web control panel with passkeys and two-factor authentication, to manage users, aliases, DNS, certificates, websites and backups.
 - System status checks, with a daily email when something needs attention, and Munin monitoring.
 - Encrypted backups (duplicity) to the box itself, an rsync server, Amazon S3 or another S3-compatible service, or Backblaze B2.
 - A firewall (ufw) and protection against brute-force logins (fail2ban).

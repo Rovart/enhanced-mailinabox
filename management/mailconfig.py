@@ -552,6 +552,8 @@ def get_mail_password(email, env):
 def remove_mail_user(email, env):
 	# remove
 	conn, c = open_database(env, with_connection=True)
+	# (SQLite doesn't enforce the passkeys table's foreign key unless asked to.)
+	c.execute("DELETE FROM passkeys WHERE user_id IN (SELECT id FROM users WHERE email=?)", (email, ))
 	c.execute("DELETE FROM users WHERE email=?", (email, ))
 	if c.rowcount != 1:
 		return ("That's not a user (%s)." % email, 400)

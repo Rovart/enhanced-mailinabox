@@ -22,10 +22,44 @@
 </style>
 
 <div class="page-header">
-	<h2>Two-Factor Authentication</h2>
-	<p class="text-body-secondary">When two-factor authentication is enabled, you will be prompted to enter a six digit
-		code from an authenticator app (usually on your phone) when you log into this control panel.</p>
+	<h2>Passkeys &amp; Two-Factor Authentication</h2>
+	<p class="text-body-secondary">Ways to protect your logins to this control panel.</p>
 </div>
+
+<div class="card mb-4" id="passkeys">
+	<div class="card-header">
+		<h3 class="h5 mb-0" id="passkeys-title">Passkeys</h3>
+	</div>
+	<div class="card-body">
+		<p class="text-body-secondary">A passkey logs you in with your fingerprint, face or screen lock, or with a
+			security key, instead of your password and two-factor code. It only works at this box&rsquo;s address,
+			so a fake site can&rsquo;t use it.</p>
+		<ul class="list-group mb-3" id="passkeys-list" aria-labelledby="passkeys-title" aria-live="polite"></ul>
+		<p class="text-body-secondary mb-0 d-none" id="passkeys-unsupported">This browser can&rsquo;t add passkeys.</p>
+		<form id="passkey-add">
+			<div class="row g-3 mb-3">
+				<div class="col-12 col-md-6">
+					<label for="passkey-label" class="form-label">Name</label>
+					<input type="text" id="passkey-label" class="form-control" placeholder="My laptop" maxlength="64"
+						autocomplete="off">
+				</div>
+				<div class="col-12 col-md-6">
+					<label for="passkey-password" class="form-label">Your password</label>
+					<input type="password" id="passkey-password" class="form-control" autocomplete="current-password"
+						aria-describedby="passkey-password-help" required>
+				</div>
+			</div>
+			<button type="submit" class="btn btn-primary"><span class="fa-solid fa-plus me-1"
+					aria-hidden="true"></span>Add passkey</button>
+			<p class="form-text mt-2 mb-0" id="passkey-password-help">Your password is asked again because a passkey
+				logs in without it.</p>
+		</form>
+	</div>
+</div>
+
+<h3 class="h5 mb-2">Two-factor authentication</h3>
+<p class="text-body-secondary">When two-factor authentication is enabled, you will be prompted to enter a six digit
+	code from an authenticator app (usually on your phone) when you log into this control panel with your password.</p>
 
 <div class="card border-danger-subtle mb-4">
 	<div class="card-header bg-danger-subtle text-danger-emphasis border-danger-subtle">
@@ -182,6 +216,8 @@
 
 	function show_mfa() {
 		reset_view();
+		$('#passkey-add').toggleClass('d-none', !passkeys.supported());
+		$('#passkeys-unsupported').toggleClass('d-none', passkeys.supported());
 
 		api(
 			'/mfa/status',
@@ -189,6 +225,7 @@
 			{},
 			function (res) {
 				mfa_el.wrapper.classList.add('loaded');
+				render_passkeys(res.passkeys || []);
 
 				var has_mfa = false;
 				res.enabled_mfa.forEach(function (mfa) {
@@ -238,6 +275,89 @@
 		return false;
 	}
 
+	function format_passkey_date(iso) {
+		return iso ? new Date(iso).toLocaleDateString() : null;
+	}
+
+	function render_passkeys(list) {
+		var ul = $('#passkeys-list').empty();
+		if (list.length == 0) {
+			ul.append($('<li class="list-group-item text-body-secondary"/>').text("No passkeys yet."));
+			return;
+		}
+		list.forEach(function (passkey) {
+			var used = format_passkey_date(passkey.last_used);
+			var li = $('<li class="list-group-item d-flex align-items-center gap-2"/>');
+			li.append($('<span class="fa-solid fa-key text-body-secondary" aria-hidden="true"/>'));
+			li.append($('<div class="flex-grow-1"/>')
+				.append($('<div class="fw-medium text-break"/>').text(passkey.label))
+				.append($('<div class="small text-body-secondary"/>').text(
+					"Added " + format_passkey_date(passkey.created) + " \u00b7 " + (used ? "Last used " + used : "Never used"))));
+			li.append($('<button type="button" class="btn btn-sm btn-outline-secondary"/>')
+				.attr('aria-label', 'Remove ' + passkey.label).attr('title', 'Remove')
+				.append($('<span class="fa-solid fa-xmark" aria-hidden="true"/>'))
+				.on('click', function () { do_remove_passkey(passkey); }));
+			ul.append(li);
+		});
+	}
+
+	function do_add_passkey(evt) {
+		evt.preventDefault();
+		var password = $('#passkey-password').val();
+		if (!password) {
+			show_modal_error("Passkeys", "Enter your password.", function () {
+				$('#passkey-password').trigger('focus');
+			});
+			return false;
+		}
+
+		// The box checks the password and sends a challenge, the browser asks the user to
+		// create the passkey, and the box checks the browser's answer.
+		api(
+			'/mfa/passkeys/options',
+			'POST',
+			{ password: password },
+			function (options) {
+				$('#passkey-password').val('');
+				passkeys.create(options).then(function (credential) {
+					api(
+						'/mfa/passkeys/add',
+						'POST',
+						{ credential: JSON.stringify(credential), label: $('#passkey-label').val() },
+						function () {
+							$('#passkey-label').val('');
+							show_mfa();
+						},
+						function (res) { show_modal_error("Passkeys", res); });
+				}, function (error) {
+					var message = passkeys.error_message(error, options.rp.id);
+					if (message)
+						show_modal_error("Passkeys", message);
+				});
+			},
+			function (res) {
+				show_modal_error("Passkeys", res, function () {
+					$('#passkey-password').val('').trigger('focus');
+				});
+			});
+		return false;
+	}
+
+	function do_remove_passkey(passkey) {
+		show_modal_confirm(
+			"Remove Passkey",
+			"Remove \u201c" + passkey.label + "\u201d? It won\u2019t log in any more, and the sessions it opened end.",
+			"Remove",
+			function () {
+				api(
+					'/mfa/passkeys/remove',
+					'POST',
+					{ id: passkey.id },
+					function () { show_mfa(); },
+					function (res) { show_modal_error("Passkeys", res); });
+			});
+	}
+
 	function copy_totp_secret() {
 		// Copies the secret to the clipboard, or else selects it so that it can be copied by hand.
 		var secret = mfa_el.totpSetupSecret.value;
@@ -262,4 +382,5 @@
 
 	// (This script runs before jQuery is loaded.)
 	document.getElementById('totp-setup-copy').addEventListener('click', copy_totp_secret);
+	document.getElementById('passkey-add').addEventListener('submit', do_add_passkey);
 </script>

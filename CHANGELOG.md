@@ -1,6 +1,18 @@
 CHANGELOG
 =========
 
+Unreleased
+----------
+
+* Passkeys for the control panel: log in with your fingerprint, face or screen lock, or with a
+  security key, instead of your password and two-factor code. Add one or more, each with a name,
+  in the account menu > Passkeys & two-factor; adding one asks for your password again. A passkey
+  only works at the box's hostname, so a fake site can't use it. Removing one ends the sessions it
+  opened, and administrators can list and remove a user's passkeys with
+  `management/cli.py user passkeys`. Logging in with a password, and two-factor codes, work as
+  before. The box checks passkeys with py_webauthn 3.0.1 (checks of user verification and of the
+  signature counter included, each challenge used once within five minutes).
+
 Enhanced Mail-in-a-Box v61.20
 -----------------------------
 

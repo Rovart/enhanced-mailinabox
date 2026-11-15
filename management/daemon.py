@@ -29,6 +29,7 @@ from mailconfig import get_mail_user_privileges, add_remove_mail_user_privilege,
 from mailconfig import get_mail_aliases, get_mail_aliases_ex, get_mail_domains, add_mail_alias, remove_mail_alias
 from mailconfig import get_mail_quota, set_mail_quota, get_default_quota, validate_quota
 from mfa import get_public_mfa_state, provision_totp, validate_totp_secret, enable_mfa, disable_mfa
+from passkeys import get_passkeys, get_registration_options, add_passkey, remove_passkey, get_login_options, check_passkey_login
 
 env = utils.load_environment()
 
@@ -234,6 +235,42 @@ def login():
 	app.logger.info("New login session created for {}".format(email))
 
 	# Return.
+	return json_response(resp)
+
+
+# Log in with a passkey: the browser asks for a challenge, the user's authenticator signs
+# it, and the answer is exchanged for a session like the one /login gives. A passkey
+# replaces the email address, the password and the two-factor code.
+
+
+@app.route('/login/passkey/options', methods=["POST"])
+def login_passkey_options():
+	return json_response(get_login_options(env))
+
+
+@app.route('/login/passkey', methods=["POST"])
+def login_passkey():
+	email, passkey_id, problem = check_passkey_login(request.form.get('credential', ''), env, app.logger)
+	privs = get_mail_user_privileges(email, env) if not problem else None
+	if isinstance(privs, tuple):
+		# The user was removed meanwhile.
+		problem = "This passkey isn't valid on this box any more."
+	if problem:
+		log_failed_login(request)
+		return json_response({
+			"status": "invalid",
+			"reason": problem,
+		})
+
+	resp = {
+		"status": "ok",
+		"email": email,
+		"privileges": privs,
+		"api_key": auth_service.create_session_key(email, env, type='login', passkey_id=passkey_id),
+	}
+
+	app.logger.info("New login session created for {} with a passkey".format(email))
+
 	return json_response(resp)
 
 
@@ -768,7 +805,10 @@ def mfa_get_status():
 		return ("You are not an administrator; you can only view your own MFA status!", 403)
 
 	try:
-		resp = {"enabled_mfa": get_public_mfa_state(email, env)}
+		resp = {
+			"enabled_mfa": get_public_mfa_state(email, env),
+			"passkeys": get_passkeys(email, env),
+		}
 		if email == request.user_email:
 			resp.update({"new_mfa": {"totp": provision_totp(email, env)}})
 	except ValueError as e:
@@ -813,6 +853,56 @@ def totp_post_disable():
 		return "OK"
 	else:  # error
 		return ("Invalid user or MFA id.", 400)
+
+
+# Passkeys for logging in (see passkeys.py). Each user adds their own; they are listed by
+# /mfa/status.
+
+
+@app.route('/mfa/passkeys/options', methods=['POST'])
+@authorized_personnel_only(admin = False)
+def passkeys_options():
+	# A passkey logs in without the password, so adding one asks for the password again:
+	# a session alone (say, a session key copied from a browser) isn't enough.
+	if request.user_email is None:
+		return ("Passkeys are added by a user, not with the system API key.", 400)
+	try:
+		auth_service.check_password(request.user_email, request.form.get('password', ''), env)
+	except ValueError:
+		log_failed_login(request)
+		return ("Incorrect password.", 400)
+	return json_response(get_registration_options(request.user_email, env))
+
+
+@app.route('/mfa/passkeys/add', methods=['POST'])
+@authorized_personnel_only(admin = False)
+def passkeys_add():
+	if request.user_email is None:
+		return ("Passkeys are added by a user, not with the system API key.", 400)
+	problem = add_passkey(request.user_email, request.form.get('credential', ''),
+						request.form.get('label', ''), env, app.logger)
+	if problem:
+		return (problem, 400)
+	app.logger.info("Passkey added for {}".format(request.user_email))
+	return "OK"
+
+
+@app.route('/mfa/passkeys/remove', methods=['POST'])
+@authorized_personnel_only(admin = False)
+def passkeys_remove():
+	# Removes one of the user's passkeys ('id'), or all of them. Administrators can
+	# remove another user's passkeys with the 'user' field.
+	email = request.form.get('user', request.user_email)
+	if "admin" not in request.user_privs and email != request.user_email:
+		return ("You are not an administrator; you can only remove your own passkeys!", 403)
+	passkey_id = request.form.get('id') or None
+	if passkey_id is not None:
+		if not re.fullmatch(r"[0-9]{1,18}", passkey_id):
+			return ("Invalid passkey.", 400)
+		passkey_id = int(passkey_id)
+	if email not in get_mail_users(env) or not remove_passkey(email, passkey_id, env):
+		return ("Invalid user or passkey.", 400)
+	return "OK"
 
 
 # WEB

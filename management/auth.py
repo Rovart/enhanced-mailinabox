@@ -11,6 +11,7 @@ from expiringdict import ExpiringDict
 import utils
 from mailconfig import get_mail_password, get_mail_user_privileges
 from mfa import get_hash_mfa_state, validate_auth_mfa
+from passkeys import passkey_exists
 
 DEFAULT_KEY_PATH = '/var/lib/mailinabox/api.key'
 DEFAULT_AUTH_REALM = 'Mail-in-a-Box Management Server'
@@ -112,7 +113,16 @@ class AuthService:
 		# On login failure, raises a ValueError with a login error message. On
 		# success, nothing is returned.
 
-		# Authenticate.
+		self.check_password(email, pw, env)
+
+		# If MFA is enabled, check that MFA passes.
+		status, hints = validate_auth_mfa(email, request, env)
+		if not status:
+			# Login valid. Hints may have more info.
+			raise ValueError(",".join(hints))
+
+	def check_password(self, email, pw, env):
+		# Checks a user's password. On failure, raises a ValueError.
 		try:
 			# Get the hashed password of the user. Raise a ValueError if the
 			# email address does not correspond to a user. But wrap it in the
@@ -139,12 +149,6 @@ class AuthService:
 			# Login failed.
 			raise ValueError("Incorrect email address or password.")
 
-		# If MFA is enabled, check that MFA passes.
-		status, hints = validate_auth_mfa(email, request, env)
-		if not status:
-			# Login valid. Hints may have more info.
-			raise ValueError(",".join(hints))
-
 	def create_user_password_state_token(self, email, env):
 		# Create a token that changes if the user's password or MFA options change
 		# so that sessions become invalid if any of that information changes.
@@ -159,14 +163,16 @@ class AuthService:
 		hash_key = self.key.encode('ascii')
 		return hmac.new(hash_key, msg, digestmod="sha256").hexdigest()
 
-	def create_session_key(self, username, env, type=None):
-		# Create a new session.
+	def create_session_key(self, username, env, type=None, passkey_id=None):
+		# Create a new session. A session opened with a passkey ends when the passkey
+		# is removed.
 		token = secrets.token_hex(32)
 		self.sessions[token] = {
 			"email": username,
 			"password_token":
 			self.create_user_password_state_token(username, env),
 			"type": type,
+			"passkey_id": passkey_id,
 		}
 		return token
 
@@ -180,5 +186,7 @@ class AuthService:
 			return None
 		if session["password_token"] != self.create_user_password_state_token(
 			session["email"], env):
+			return None
+		if session.get("passkey_id") is not None and not passkey_exists(session["passkey_id"], env):
 			return None
 		return session
