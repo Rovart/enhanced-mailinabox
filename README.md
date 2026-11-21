@@ -89,7 +89,7 @@ Individuals and small and medium-sized organizations who want to run their own m
 - 1 CPU core, 1 GB of RAM (512 MB is the minimum) and 10 GB of disk. Needs grow with the number of users and the amount of mail.
 - `/tmp` mounted with exec permissions.
 
-PHP 8.4 (8.4.27 or newer) is installed from [packages.sury.org](https://deb.sury.org) on Debian and from the [ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php) PPA on Ubuntu, so every operating system runs the same version.
+PHP 8.4 (8.4.28 or newer) is installed from [packages.sury.org](https://deb.sury.org) on Debian and from the [ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php) PPA on Ubuntu, so every operating system runs the same version.
 
 **Network**
 - A static public IPv4 address, with reverse DNS pointing to the box's hostname.

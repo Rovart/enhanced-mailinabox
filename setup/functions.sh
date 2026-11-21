@@ -256,7 +256,7 @@ PHP_VER=8.4
 # Oldest PHP $PHP_VER release we accept (e.g. because of security fixes). The repositories
 # above only keep the latest release, so the setup installs that one; it refuses to run
 # when the latest release available is older than this one.
-PHP_MIN_VER=8.4.27
+PHP_MIN_VER=8.4.28
 
 # Older Nextcloud releases refuse to run under newer PHP versions. When an existing
 # Nextcloud installation needs to go through intermediate major versions that do not

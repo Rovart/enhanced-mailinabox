@@ -1,6 +1,17 @@
 CHANGELOG
 =========
 
+Unreleased
+----------
+
+* Security: the setup requires PHP 8.4.28 or newer (it required 8.4.27). PHP 8.4.28 fixes 14
+  vulnerabilities, among them a use-after-free in the timezone cache and two session handling
+  bugs that can lead to remote code execution, request smuggling and a use-after-free in PHP-FPM,
+  and a PHAR signature bypass. Boxes that install PHP updates automatically (since v61.8) get it
+  from the PHP repository within a day; on older boxes, run the setup.
+* Nextcloud Calendar updated to 6.6.6 (bug fixes: attachments shared by their real path, Talk
+  attendees matched by email).
+
 Enhanced Mail-in-a-Box v61.21
 -----------------------------
 
