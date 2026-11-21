@@ -36,8 +36,8 @@ nextcloud_hash=972c7946d7528fe95682f6f3ef00467bd485f742
 #   source archive), which you can find by running: curl -sL <url> | sha1sum
 contacts_ver=8.9.5
 contacts_hash=d0fb2f8f275f14be273a84f9b9a512e5e51e043b
-calendar_ver=6.6.5
-calendar_hash=c235ac4624de55ff6a31b48a194cd344f20200f7
+calendar_ver=6.6.6
+calendar_hash=a1b6409824409cdb5cc4af2410e79c47d67a3b1f
 # user_external is what allows Nextcloud to authenticate users against our IMAP server.
 # It is the one holding us back from newer Nextcloud versions: check that a compatible
 # release exists before bumping Nextcloud to a new major version!
