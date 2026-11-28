@@ -12,6 +12,17 @@ Unreleased
 * Nextcloud Calendar updated to 6.6.6 (bug fixes: attachments shared by their real path, Talk
   attendees matched by email).
 
+Enhanced Mail-in-a-Box v61.22
+-----------------------------
+
+* Roundcube updated to 1.7.7, a security release with 12 fixes, among them bypasses of the CSS
+  scoping and of remote content blocking (through comments in inline styles and in SVG, or the
+  CSS proxy), a response disclosure in the CSS proxy, Sieve script injection through a comparator
+  name and through the body, address and envelope part fields, insecure attachment content
+  (PDF, PostScript, SVG) passed to ImageMagick again, a denial of service in the TNEF decoder and a
+  fallback to an insecure IMAP, SMTP or ManageSieve connection when TLS is configured but not
+  announced (https://github.com/roundcube/roundcubemail/releases/tag/1.7.7).
+
 Enhanced Mail-in-a-Box v61.21
 -----------------------------
 
